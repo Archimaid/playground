@@ -34,7 +34,9 @@ test('the starter diagram renders on first visit', async () => {
   const { page, pageErrors, close } = await openPlayground();
   await renderedElements(page).first().waitFor();
   assert.equal(await renderedElements(page).count(), 4);
-  assert.match(await page.locator('.problems-summary').textContent(), /Valid · 4 elements, 4 relationships/u);
+  assert.equal(await page.locator('#status-chip').textContent(), 'Valid');
+  assert.equal(await page.locator('#model-summary').textContent(), '4 elements · 4 relationships');
+  assert.equal(await page.locator('#problems').isHidden(), true);
   assert.equal(await page.locator('#download').isDisabled(), false);
   assert.deepEqual(pageErrors, []);
   await close();
@@ -51,7 +53,7 @@ test('every example renders without problems', async () => {
     const previous = await page.locator('#preview svg').getAttribute('id');
     await page.selectOption('#examples', option.value);
     await page.waitForFunction((id) => document.querySelector('#preview svg')?.id !== id, previous);
-    assert.match(await page.locator('.problems-summary').textContent(), /^Valid/u, option.label);
+    assert.equal(await page.locator('#status-chip').textContent(), 'Valid', option.label);
     assert.ok((await renderedElements(page).count()) > 0, `${option.label} drew no elements`);
   }
   assert.deepEqual(pageErrors, []);
@@ -66,7 +68,9 @@ test('an error is listed and the last valid diagram stays visible', async () => 
   await page.keyboard.type('\n  customer --> nobody');
   await page.locator('.problem.is-error').first().waitFor();
   assert.match(await page.locator('.problem.is-error').first().textContent(), /Unknown element or note "nobody"/u);
-  assert.equal(await page.locator('#preview').getAttribute('data-state'), 'stale');
+  assert.equal(await page.locator('#diagram-pane').getAttribute('data-state'), 'stale');
+  assert.equal(await page.locator('#status-chip').textContent(), '1 error');
+  assert.equal(await page.locator('#tab-code-badge').textContent(), '1');
   assert.equal(await renderedElements(page).count(), 4);
   await close();
 });
@@ -75,7 +79,7 @@ test('a share link opens the same diagram in a new visit', async () => {
   const first = await openPlayground();
   await renderedElements(first.page).first().waitFor();
   await first.page.selectOption('#examples', 'nested-components');
-  await first.page.locator('.problems-summary', { hasText: '4 elements' }).waitFor();
+  await first.page.locator('#model-summary', { hasText: '4 elements' }).waitFor();
   await first.page.click('#share');
   await first.page.locator('#toast', { hasText: 'Link copied' }).waitFor();
   const link = await first.page.evaluate(() => navigator.clipboard.readText());
@@ -87,4 +91,55 @@ test('a share link opens the same diagram in a new visit', async () => {
   await renderedElements(second.page).first().waitFor();
   assert.equal(await second.page.locator('.cm-content').innerText(), source);
   await second.close();
+});
+
+test('zoom steps from the fitted scale and Fit restores it', async () => {
+  const { page, close } = await openPlayground();
+  await page.selectOption('#examples', 'cross-layer-relationships');
+  await page.locator('#model-summary', { hasText: '26 elements' }).waitFor();
+  await page.waitForFunction(
+    () => document.querySelector('#preview svg')?.querySelectorAll('[data-archimate-element]').length === 26,
+  );
+  const fitted = Number.parseInt(await page.locator('#zoom-reset').textContent(), 10);
+  assert.ok(fitted < 100, `a wide diagram should be fitted below 100%, got ${fitted}%`);
+  await page.click('#zoom-in');
+  const zoomed = Number.parseInt(await page.locator('#zoom-reset').textContent(), 10);
+  assert.ok(zoomed > fitted, `zoom in should enlarge from ${fitted}%, got ${zoomed}%`);
+  assert.equal(await page.locator('#zoom-fit').getAttribute('aria-pressed'), 'false');
+  await page.click('#zoom-reset');
+  assert.equal(await page.locator('#zoom-reset').textContent(), '100%');
+  await page.click('#zoom-fit');
+  assert.equal(Number.parseInt(await page.locator('#zoom-reset').textContent(), 10), fitted);
+  await close();
+});
+
+test('the divider resizes the panes from the keyboard', async () => {
+  const { page, close } = await openPlayground();
+  const sourceWidth = () => page.locator('#code-pane').evaluate((pane) => pane.getBoundingClientRect().width);
+  const before = await sourceWidth();
+  await page.focus('#divider');
+  await page.keyboard.press('ArrowRight');
+  assert.ok((await sourceWidth()) > before);
+  assert.equal(await page.locator('#divider').getAttribute('aria-valuenow'), '44');
+  await close();
+});
+
+test('the notation switch rewrites the source and applies to examples loaded later', async () => {
+  const { page, pageErrors, close } = await openPlayground();
+  await page.selectOption('#examples', 'cross-layer-relationships');
+  await page.locator('#model-summary', { hasText: '26 elements' }).waitFor();
+  assert.equal(await page.locator('#notation-long').getAttribute('aria-pressed'), 'true');
+
+  await page.click('#notation-shorthand');
+  await page.locator('#toast', { hasText: 'Rewrote 32 relationships in shorthand' }).waitFor();
+  assert.match(await page.locator('#toast').textContent(), /4 relationships stay in long form/u);
+  assert.equal(await page.locator('#notation-shorthand').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#model-summary').textContent(), '26 elements · 36 relationships');
+  assert.match(await page.locator('.cm-content').innerText(), /register ==> accept/u);
+
+  await page.selectOption('#examples', 'order-fulfilment');
+  await page.locator('#model-summary', { hasText: '2 elements' }).waitFor();
+  assert.match(await page.locator('.cm-content').innerText(), /clerk @==> fulfil/u);
+  assert.deepEqual(pageErrors, []);
+  await close();
 });

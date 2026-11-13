@@ -8,14 +8,25 @@ import { archimateSyntax } from './syntax.ts';
 export interface SourceEditor {
   readonly source: () => string;
   readonly replaceSource: (source: string) => void;
+  readonly rewriteSource: (source: string) => void;
   readonly showDiagnostics: (diagnostics: readonly ArchiMateDiagnostic[]) => void;
   readonly revealDiagnostic: (diagnostic: ArchiMateDiagnostic) => void;
 }
 
+export interface CursorPosition {
+  readonly line: number;
+  readonly column: number;
+}
+
+export interface SourceEditorOptions {
+  readonly initialSource: string;
+  readonly onChange: (source: string) => void;
+  readonly onCursorMove: (position: CursorPosition) => void;
+}
+
 export function createSourceEditor(
   parent: HTMLElement,
-  initialSource: string,
-  onChange: (source: string) => void,
+  { initialSource, onChange, onCursorMove }: SourceEditorOptions,
 ): SourceEditor {
   const view = new EditorView({
     parent,
@@ -29,10 +40,12 @@ export function createSourceEditor(
         EditorView.contentAttributes.of({ 'aria-label': 'Diagram source' }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) onChange(update.state.doc.toString());
+          if (update.docChanged || update.selectionSet) onCursorMove(cursorPosition(update.state));
         }),
       ],
     }),
   });
+  onCursorMove(cursorPosition(view.state));
 
   return {
     source: () => view.state.doc.toString(),
@@ -40,6 +53,15 @@ export function createSourceEditor(
     replaceSource(source) {
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source }, selection: { anchor: 0 } });
       view.scrollDOM.scrollTo({ top: 0, left: 0 });
+    },
+    // For a rewrite that keeps the lines in place: the cursor stays on its line and the view does not scroll.
+    rewriteSource(source) {
+      const { scrollTop, scrollLeft } = view.scrollDOM;
+      const cursorLine = view.state.doc.lineAt(view.state.selection.main.head).number;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } });
+      const line = view.state.doc.line(Math.min(cursorLine, view.state.doc.lines));
+      view.dispatch({ selection: { anchor: line.from } });
+      view.scrollDOM.scrollTo({ top: scrollTop, left: scrollLeft });
     },
     showDiagnostics(diagnostics) {
       const doc = view.state.doc;
@@ -62,6 +84,12 @@ export function createSourceEditor(
       view.focus();
     },
   };
+}
+
+function cursorPosition(state: EditorState): CursorPosition {
+  const head = state.selection.main.head;
+  const line = state.doc.lineAt(head);
+  return { line: line.number, column: head - line.from + 1 };
 }
 
 // Diagnostics use 1-based lines and columns with an exclusive end; the validator can report a position past

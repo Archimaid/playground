@@ -6,12 +6,16 @@ import './styles.css';
 import { validateArchiMate, type ArchiMateDiagnostic, type ArchiMateModel } from 'archimaid/language';
 import { createSourceEditor } from './editor.ts';
 import { examples, starterExample } from './examples.ts';
+import { convertNotation, detectNotation, type Notation } from './notation.ts';
 import { renderDiagram, type DiagramTheme } from './render.ts';
 import { decodeShareHash, encodeShareHash } from './share.ts';
+import { setUpSplit } from './split.ts';
 import { readStored, writeStored } from './storage.ts';
+import { applyZoom, clampZoom, displayedScale, maxZoom, minZoom, stepZoom, type Zoom } from './zoom.ts';
 
 const sourceKey = 'archimaid.playground.source';
 const themeKey = 'archimaid.playground.theme';
+const notationKey = 'archimaid.playground.notation';
 const renderDelayMs = 250;
 
 function byId<T extends HTMLElement>(id: string, type: new () => T): T {
@@ -22,50 +26,81 @@ function byId<T extends HTMLElement>(id: string, type: new () => T): T {
 
 const ui = {
   workspace: byId('workspace', HTMLElement),
+  divider: byId('divider', HTMLDivElement),
   editor: byId('editor', HTMLDivElement),
+  statusChip: byId('status-chip', HTMLSpanElement),
+  notationLong: byId('notation-long', HTMLButtonElement),
+  notationShorthand: byId('notation-shorthand', HTMLButtonElement),
   problems: byId('problems', HTMLDivElement),
+  problemsCount: byId('problems-count', HTMLSpanElement),
+  problemsList: byId('problems-list', HTMLUListElement),
+  cursorPosition: byId('cursor-position', HTMLSpanElement),
+  modelSummary: byId('model-summary', HTMLSpanElement),
+  storageState: byId('storage-state', HTMLSpanElement),
+  canvas: byId('diagram-pane', HTMLElement),
   preview: byId('preview', HTMLDivElement),
   previewState: byId('preview-state', HTMLParagraphElement),
+  previewStateText: byId('preview-state-text', HTMLSpanElement),
   examples: byId('examples', HTMLSelectElement),
-  theme: byId('theme', HTMLButtonElement),
+  zoomOut: byId('zoom-out', HTMLButtonElement),
+  zoomReset: byId('zoom-reset', HTMLButtonElement),
+  zoomIn: byId('zoom-in', HTMLButtonElement),
+  zoomFit: byId('zoom-fit', HTMLButtonElement),
+  themeLight: byId('theme-light', HTMLButtonElement),
+  themeDark: byId('theme-dark', HTMLButtonElement),
   download: byId('download', HTMLButtonElement),
   share: byId('share', HTMLButtonElement),
   tabCode: byId('tab-code', HTMLButtonElement),
+  tabCodeBadge: byId('tab-code-badge', HTMLSpanElement),
   tabDiagram: byId('tab-diagram', HTMLButtonElement),
   toast: byId('toast', HTMLDivElement),
 };
 
+type PreviewState = 'loading' | 'ready' | 'stale' | 'failed';
+
 let theme: DiagramTheme = readStored(themeKey) === 'dark' ? 'dark' : 'light';
-let latest: { source: string; model: ArchiMateModel | undefined } = { source: '', model: undefined };
+let zoom: Zoom = 'fit';
+const storedNotation = readStored(notationKey);
+// Undefined until the viewer picks one; examples then load as written.
+let preferredNotation: Notation | undefined =
+  storedNotation === 'long' || storedNotation === 'shorthand' ? storedNotation : undefined;
+let latest: { source: string; model: ArchiMateModel | undefined; errors: number } = {
+  source: '',
+  model: undefined,
+  errors: 0,
+};
 let rendered: { svg: string; model: ArchiMateModel } | undefined;
 let renderTimer: ReturnType<typeof setTimeout> | undefined;
 
 const shared = await decodeShareHash(location.hash);
-const editor = createSourceEditor(
-  ui.editor,
-  shared.kind === 'source' ? shared.source : (readStored(sourceKey) ?? starterExample.source),
-  (source) => {
-    writeStored(sourceKey, source);
+const initialSource = shared.kind === 'source' ? shared.source : (readStored(sourceKey) ?? starterExample.source);
+const editor = createSourceEditor(ui.editor, {
+  initialSource,
+  onChange(source) {
+    showStorageState(writeStored(sourceKey, source) ? 'saved' : 'blocked');
     // The shared link no longer describes what is in the editor.
     if (location.hash) history.replaceState(null, '', location.pathname + location.search);
     update(source, renderDelayMs);
   },
-);
+  onCursorMove({ line, column }) {
+    ui.cursorPosition.textContent = `Ln ${line}, Col ${column}`;
+  },
+});
+if (shared.kind === 'source') showStorageState('shared');
+else showStorageState(writeStored(sourceKey, initialSource) ? 'saved' : 'blocked');
 if (shared.kind === 'invalid') showToast('This share link is damaged, so your last diagram was opened instead.');
 
 function update(source: string, delayMs: number): void {
   const { model, diagnostics } = validateArchiMate(source);
-  latest = { source, model };
+  const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 'error').length;
+  latest = { source, model, errors };
   editor.showDiagnostics(diagnostics);
-  showProblems(diagnostics, model);
+  showStatus(diagnostics, model);
+  showNotation(source, model !== undefined);
+  showProblems(diagnostics);
   clearTimeout(renderTimer);
-  if (model) {
-    renderTimer = setTimeout(() => void draw(source, model), delayMs);
-  } else if (rendered) {
-    showPreviewState('Showing the last valid diagram. Fix the problems in the source to update it.', 'stale');
-  } else {
-    showPreviewState('Fix the problems in the source to see the diagram.', 'stale');
-  }
+  if (model) renderTimer = setTimeout(() => void draw(source, model), delayMs);
+  else showPreviewState(staleMessage(), 'stale');
 }
 
 async function draw(source: string, model: ArchiMateModel): Promise<void> {
@@ -78,52 +113,123 @@ async function draw(source: string, model: ArchiMateModel): Promise<void> {
   }
   rendered = { svg: outcome.svg, model };
   ui.preview.innerHTML = outcome.svg;
+  const svg = currentSvg();
+  if (svg) applyZoom(svg, zoom);
+  updateZoomControls();
   ui.download.disabled = false;
-  // A render that started before the latest edit may finish after it; keep the stale hint if the source broke since.
+  // A render that started before the latest edit may finish after it; keep the hint if the source broke since.
   if (latest.source === source || latest.model) showPreviewState('', 'ready');
-  else showPreviewState('Showing the last valid diagram. Fix the problems in the source to update it.', 'stale');
+  else showPreviewState(staleMessage(), 'stale');
 }
 
-function showPreviewState(message: string, state: 'loading' | 'ready' | 'stale' | 'failed'): void {
-  ui.previewState.textContent = message;
+function staleMessage(): string {
+  const problems = plural(latest.errors, 'error');
+  return rendered
+    ? `Showing the last valid diagram. Fix ${problems} to update it.`
+    : `Fix ${problems} in the source to see the diagram.`;
+}
+
+function showPreviewState(message: string, state: PreviewState): void {
+  ui.previewStateText.textContent = message;
   ui.previewState.hidden = message === '';
-  ui.preview.dataset.state = state;
+  ui.canvas.dataset.state = state;
 }
 
-function showProblems(diagnostics: readonly ArchiMateDiagnostic[], model: ArchiMateModel | undefined): void {
-  ui.problems.replaceChildren();
-  if (diagnostics.length === 0 && model) {
-    const summary = document.createElement('p');
-    summary.className = 'problems-summary is-valid';
-    summary.textContent = `Valid · ${plural(model.elements.length, 'element')}, ${plural(model.relationships.length, 'relationship')}`;
-    ui.problems.append(summary);
-    return;
-  }
+function showStatus(diagnostics: readonly ArchiMateDiagnostic[], model: ArchiMateModel | undefined): void {
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 'error').length;
   const warnings = diagnostics.length - errors;
-  const summary = document.createElement('p');
-  summary.className = errors > 0 ? 'problems-summary is-invalid' : 'problems-summary is-valid';
-  summary.textContent = [errors > 0 && plural(errors, 'error'), warnings > 0 && plural(warnings, 'warning')]
-    .filter(Boolean)
-    .join(', ');
-  const list = document.createElement('ul');
-  for (const diagnostic of diagnostics) {
-    const item = document.createElement('li');
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `problem is-${diagnostic.severity}`;
-    const position = document.createElement('span');
-    position.className = 'problem-position';
-    position.textContent = `${diagnostic.line}:${diagnostic.column}`;
-    button.append(position, ` ${diagnostic.message}`);
-    button.addEventListener('click', () => {
-      selectView('code');
-      editor.revealDiagnostic(diagnostic);
-    });
-    item.append(button);
-    list.append(item);
+  if (errors > 0) {
+    ui.statusChip.textContent = plural(errors, 'error');
+    ui.statusChip.dataset.status = 'invalid';
+  } else if (warnings > 0) {
+    ui.statusChip.textContent = plural(warnings, 'warning');
+    ui.statusChip.dataset.status = 'warning';
+  } else {
+    ui.statusChip.textContent = 'Valid';
+    ui.statusChip.dataset.status = 'valid';
   }
-  ui.problems.append(summary, list);
+  ui.tabCodeBadge.textContent = String(errors);
+  ui.tabCodeBadge.hidden = errors === 0;
+  ui.tabCode.setAttribute('aria-label', errors > 0 ? `Code, ${plural(errors, 'error')}` : 'Code');
+  ui.modelSummary.textContent = model
+    ? `${plural(model.elements.length, 'element')} · ${plural(model.relationships.length, 'relationship')}`
+    : '';
+}
+
+// The pressed button shows what the source is written in, which a hand edit can change; mixed presses neither.
+function showNotation(source: string, valid: boolean): void {
+  const written = detectNotation(source);
+  for (const [button, notation] of [
+    [ui.notationLong, 'long'],
+    [ui.notationShorthand, 'shorthand'],
+  ] as const) {
+    button.setAttribute('aria-pressed', String(written === notation));
+    button.disabled = !valid;
+    button.title = valid ? '' : 'Fix the errors first; only a valid diagram can be rewritten.';
+  }
+}
+
+function selectNotation(notation: Notation): void {
+  preferredNotation = notation;
+  writeStored(notationKey, notation);
+  const name = notation === 'long' ? 'long form' : 'shorthand';
+  const keptNote = (kept: number): string =>
+    kept > 0 ? ` ${plural(kept, 'relationship')} stay in long form because other lines refer to their IDs.` : '';
+  const result = convertNotation(editor.source(), notation);
+  switch (result.kind) {
+    case 'converted':
+      editor.rewriteSource(result.source);
+      showToast(`Rewrote ${plural(result.converted, 'relationship')} in ${name}.${keptNote(result.kept)}`);
+      return;
+    case 'unchanged':
+      showToast(`The relationships are already in ${name}.${keptNote(result.kept)}`);
+      return;
+    case 'invalid':
+      showToast('Fix the errors first; only a valid diagram can be rewritten.');
+      return;
+    case 'failed':
+      showToast('This diagram could not be rewritten without changing it, so it was left as it is.');
+      return;
+  }
+}
+
+function inPreferredNotation(source: string): string {
+  if (!preferredNotation) return source;
+  const result = convertNotation(source, preferredNotation);
+  return result.kind === 'converted' ? result.source : source;
+}
+
+function showProblems(diagnostics: readonly ArchiMateDiagnostic[]): void {
+  ui.problems.hidden = diagnostics.length === 0;
+  ui.problemsCount.textContent = String(diagnostics.length);
+  ui.problemsList.replaceChildren(
+    ...diagnostics.map((diagnostic) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `problem is-${diagnostic.severity}`;
+      const position = document.createElement('span');
+      position.className = 'problem-position';
+      position.textContent = `${diagnostic.line}:${diagnostic.column}`;
+      const message = document.createElement('span');
+      message.textContent = diagnostic.message;
+      button.append(position, message);
+      button.addEventListener('click', () => {
+        selectView('code');
+        editor.revealDiagnostic(diagnostic);
+      });
+      const item = document.createElement('li');
+      item.append(button);
+      return item;
+    }),
+  );
+}
+
+function showStorageState(state: 'saved' | 'blocked' | 'shared'): void {
+  ui.storageState.textContent = {
+    saved: 'Saved in this browser',
+    blocked: 'Not saved: browser storage is blocked',
+    shared: 'Opened from a share link',
+  }[state];
 }
 
 function plural(count: number, noun: string): string {
@@ -142,6 +248,8 @@ function selectView(view: 'code' | 'diagram'): void {
   ui.workspace.dataset.view = view;
   ui.tabCode.setAttribute('aria-selected', String(view === 'code'));
   ui.tabDiagram.setAttribute('aria-selected', String(view === 'diagram'));
+  // The pane was display: none, so its fitted scale is only known once it is visible again.
+  if (view === 'diagram') updateZoomControls();
 }
 
 function slug(text: string): string {
@@ -153,28 +261,95 @@ function slug(text: string): string {
   );
 }
 
-function applyTheme(): void {
-  ui.theme.setAttribute('aria-pressed', String(theme === 'dark'));
-  document.documentElement.dataset.diagramTheme = theme;
+function currentSvg(): SVGSVGElement | undefined {
+  const svg = ui.preview.querySelector('svg');
+  return svg instanceof SVGSVGElement ? svg : undefined;
 }
 
-const placeholder = new Option('Load an example…', '', true, true);
+// Keeps the point in the middle of the view in place, instead of jumping to the diagram's top-left corner.
+function setZoom(next: Zoom): void {
+  zoom = next;
+  const svg = currentSvg();
+  if (!svg) {
+    updateZoomControls();
+    return;
+  }
+  const { preview } = ui;
+  const centreX = (preview.scrollLeft + preview.clientWidth / 2) / preview.scrollWidth;
+  const centreY = (preview.scrollTop + preview.clientHeight / 2) / preview.scrollHeight;
+  applyZoom(svg, zoom);
+  preview.scrollLeft = centreX * preview.scrollWidth - preview.clientWidth / 2;
+  preview.scrollTop = centreY * preview.scrollHeight - preview.clientHeight / 2;
+  updateZoomControls();
+}
+
+function updateZoomControls(): void {
+  const svg = currentSvg();
+  const scale = svg ? displayedScale(svg) : undefined;
+  ui.zoomReset.textContent = scale === undefined ? '100%' : `${Math.round(scale * 100)}%`;
+  ui.zoomFit.setAttribute('aria-pressed', String(zoom === 'fit'));
+  ui.zoomOut.disabled = scale === undefined || scale <= minZoom + 0.001;
+  ui.zoomIn.disabled = scale === undefined || scale >= maxZoom - 0.001;
+  ui.zoomReset.disabled = scale === undefined;
+  ui.zoomFit.disabled = scale === undefined;
+}
+
+function stepFromScreen(direction: 'in' | 'out'): void {
+  const svg = currentSvg();
+  const scale = svg ? displayedScale(svg) : undefined;
+  if (scale !== undefined) setZoom(stepZoom(scale, direction));
+}
+
+function applyTheme(): void {
+  ui.themeLight.setAttribute('aria-pressed', String(theme === 'light'));
+  ui.themeDark.setAttribute('aria-pressed', String(theme === 'dark'));
+}
+
+function selectTheme(next: DiagramTheme): void {
+  if (next === theme) return;
+  theme = next;
+  writeStored(themeKey, theme);
+  applyTheme();
+  if (latest.model) void draw(latest.source, latest.model);
+}
+
+const placeholder = new Option('Examples', '', true, true);
 placeholder.disabled = true;
 ui.examples.append(placeholder, ...examples.map((example) => new Option(example.title, example.id)));
 ui.examples.addEventListener('change', () => {
   const example = examples.find((candidate) => candidate.id === ui.examples.value);
   ui.examples.value = '';
   if (!example) return;
-  editor.replaceSource(example.source);
+  zoom = 'fit';
+  editor.replaceSource(inPreferredNotation(example.source));
   showToast(`Loaded “${example.title}”. Undo brings back your previous diagram.`);
 });
 
-ui.theme.addEventListener('click', () => {
-  theme = theme === 'dark' ? 'light' : 'dark';
-  writeStored(themeKey, theme);
-  applyTheme();
-  if (latest.model) void draw(latest.source, latest.model);
-});
+ui.zoomIn.addEventListener('click', () => stepFromScreen('in'));
+ui.zoomOut.addEventListener('click', () => stepFromScreen('out'));
+ui.zoomReset.addEventListener('click', () => setZoom(1));
+ui.zoomFit.addEventListener('click', () => setZoom('fit'));
+ui.preview.addEventListener(
+  'wheel',
+  (event) => {
+    // Pinch on a trackpad arrives as a wheel event with ctrlKey set; plain scrolling still pans.
+    if (!event.ctrlKey && !event.metaKey) return;
+    const svg = currentSvg();
+    const scale = svg ? displayedScale(svg) : undefined;
+    if (scale === undefined) return;
+    event.preventDefault();
+    setZoom(clampZoom(scale * Math.exp(-event.deltaY * 0.01)));
+  },
+  { passive: false },
+);
+new ResizeObserver(() => {
+  if (zoom === 'fit') updateZoomControls();
+}).observe(ui.preview);
+
+ui.notationLong.addEventListener('click', () => selectNotation('long'));
+ui.notationShorthand.addEventListener('click', () => selectNotation('shorthand'));
+ui.themeLight.addEventListener('click', () => selectTheme('light'));
+ui.themeDark.addEventListener('click', () => selectTheme('dark'));
 
 ui.download.addEventListener('click', () => {
   if (!rendered) return;
@@ -209,5 +384,7 @@ window.addEventListener('hashchange', async () => {
   else if (next.kind === 'invalid') showToast('This share link is damaged, so the diagram was not changed.');
 });
 
+setUpSplit(ui.workspace, ui.divider);
 applyTheme();
+updateZoomControls();
 update(editor.source(), 0);

@@ -7,10 +7,11 @@ export function readStored(key: string): string | null {
   }
 }
 
-export function writeStored(key: string, value: string): void {
+export function writeStored(key: string, value: string): boolean {
   try {
     localStorage.setItem(key, value);
+    return true;
   } catch {
-    return;
+    return false;
   }
 }

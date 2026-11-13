@@ -16,7 +16,7 @@
   <body>
     <header class="topbar">
       <a class="brand" href="https://archimaid.org">
-        <svg width="28" height="28" viewBox="0 0 120 120" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 120 120" aria-hidden="true">
           <rect
             x="34"
             y="14"
@@ -48,24 +48,37 @@
             stroke="var(--ink)"
           />
         </svg>
-        <span>Archimaid <span class="brand-suffix">Playground</span></span>
+        <span class="brand-name">Archimaid</span>
+        <span class="brand-suffix">Playground</span>
       </a>
-      <div class="toolbar">
-        <label class="select">
-          <span class="visually-hidden">Load an example</span>
-          <select id="examples"></select>
-        </label>
-        <button id="theme" class="button" type="button" aria-pressed="false">Dark diagram</button>
-        <button id="download" class="button" type="button" disabled>Download SVG</button>
-        <button id="share" class="button button-primary" type="button">Share</button>
-        <a class="button button-quiet" href="https://github.com/Archimaid/archimaid/blob/main/docs/reference.md"
-          >Syntax reference</a
-        >
-      </div>
+      <label class="examples">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+        <span class="visually-hidden">Load an example</span>
+        <select id="examples"></select>
+      </label>
+      <div class="topbar-spacer"></div>
+      <nav class="topbar-links" aria-label="Documentation">
+        <a href="https://github.com/Archimaid/archimaid/blob/main/docs/reference.md">Syntax reference</a>
+        <a href="https://github.com/Archimaid/archimaid">GitHub</a>
+      </nav>
+      <button id="share" class="button button-primary" type="button">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+          <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+        </svg>
+        Share
+      </button>
     </header>
 
     <div class="view-tabs" role="tablist" aria-label="View">
-      <button id="tab-code" type="button" role="tab" aria-selected="true" aria-controls="code-pane">Code</button>
+      <button id="tab-code" type="button" role="tab" aria-selected="true" aria-controls="code-pane">
+        Code <span id="tab-code-badge" class="count-badge" hidden></span>
+      </button>
       <button id="tab-diagram" type="button" role="tab" aria-selected="false" aria-controls="diagram-pane">
         Diagram
       </button>
@@ -73,12 +86,68 @@
 
     <main id="workspace" class="workspace" data-view="code">
       <section id="code-pane" class="pane code-pane" aria-label="Source">
+        <div class="pane-header">
+          <h2 class="pane-title">Source</h2>
+          <div class="segmented notation" role="group" aria-label="Relationship notation">
+            <button id="notation-long" type="button" aria-pressed="false">Long form</button>
+            <button id="notation-shorthand" type="button" aria-pressed="false">Shorthand</button>
+          </div>
+          <span id="status-chip" class="status-chip" aria-live="polite"></span>
+        </div>
         <div id="editor" class="editor"></div>
-        <div id="problems" class="problems" aria-live="polite"></div>
+        <div id="problems" class="problems" hidden>
+          <h3 class="problems-title">Problems <span id="problems-count" class="count-badge"></span></h3>
+          <ul id="problems-list"></ul>
+        </div>
+        <footer class="status-bar">
+          <span id="cursor-position"></span>
+          <span id="model-summary"></span>
+          <span id="storage-state" class="status-bar-end"></span>
+        </footer>
       </section>
+
+      <div
+        id="divider"
+        class="divider"
+        role="separator"
+        tabindex="0"
+        aria-orientation="vertical"
+        aria-label="Resize the source and diagram panes"
+        aria-controls="code-pane"
+        aria-valuemin="20"
+        aria-valuemax="80"
+      ></div>
+
       <section id="diagram-pane" class="pane diagram-pane" aria-label="Diagram">
-        <div id="preview" class="preview"></div>
-        <p id="preview-state" class="preview-state" aria-live="polite">Loading the renderer…</p>
+        <div class="pane-header diagram-toolbar">
+          <h2 class="pane-title">Diagram</h2>
+          <div class="toolbar-spacer"></div>
+          <div class="button-group" role="group" aria-label="Zoom">
+            <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+            <button id="zoom-reset" class="zoom-level" type="button" aria-label="Zoom to 100%">100%</button>
+            <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+          </div>
+          <button id="zoom-fit" class="button" type="button" aria-pressed="true">Fit</button>
+          <div class="segmented" role="group" aria-label="Diagram theme">
+            <button id="theme-light" type="button" aria-pressed="true">Light</button>
+            <button id="theme-dark" type="button" aria-pressed="false">Dark</button>
+          </div>
+          <button id="download" class="button" type="button" disabled>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+            <span>SVG</span>
+          </button>
+        </div>
+        <div class="canvas">
+          <div id="preview" class="preview"></div>
+          <p id="preview-state" class="preview-state" aria-live="polite">
+            <span class="preview-state-dot" aria-hidden="true"></span
+            ><span id="preview-state-text">Loading the renderer…</span>
+          </p>
+        </div>
       </section>
     </main>
 
