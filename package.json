@@ -1,0 +1,38 @@
+{
+  "name": "archimaid-playground",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "test": "node --test test/*.test.ts",
+    "test:browser": "npm run build && node --test test/browser/*.test.mjs"
+  },
+  "dependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/lint": "6.9.8",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@fontsource-variable/space-grotesk": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@lezer/highlight": "1.2.5",
+    "archimaid": "0.1.1",
+    "codemirror": "6.0.2",
+    "mermaid": "12.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "playwright": "1.65.0",
+    "prettier": "3.10.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.8"
+  }
+}

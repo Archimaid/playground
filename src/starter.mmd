@@ -1,0 +1,17 @@
+archimate-beta
+  direction LR
+  title: My first diagram
+
+  %% Declare an element: element <type> <id> "Name"
+  element businessActor customer "Customer"
+  element businessService ordering "Online ordering"
+  element applicationComponent webshop "Webshop"
+  element dataObject order "Order"
+
+  %% Connect elements with a shorthand connector, source on the left
+  ordering --> customer
+  webshop ..|> ordering
+  webshop ..> order
+
+  %% Or write the relationship out in full
+  relationship serving webshop_serves_customer webshop -> customer

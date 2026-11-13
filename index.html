@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Archimaid Playground</title>
+    <meta
+      name="description"
+      content="Write ArchiMate® diagrams as text and see them render as you type. Runs entirely in your browser."
+    />
+    <meta name="theme-color" content="#fbfaf6" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="https://archimaid.org">
+        <svg width="28" height="28" viewBox="0 0 120 120" aria-hidden="true">
+          <rect
+            x="34"
+            y="14"
+            width="74"
+            height="26"
+            rx="9"
+            stroke-width="8"
+            fill="var(--business)"
+            stroke="var(--ink)"
+          />
+          <rect
+            x="23"
+            y="47"
+            width="74"
+            height="26"
+            rx="9"
+            stroke-width="8"
+            fill="var(--application)"
+            stroke="var(--ink)"
+          />
+          <rect
+            x="12"
+            y="80"
+            width="74"
+            height="26"
+            rx="9"
+            stroke-width="8"
+            fill="var(--technology)"
+            stroke="var(--ink)"
+          />
+        </svg>
+        <span>Archimaid <span class="brand-suffix">Playground</span></span>
+      </a>
+      <div class="toolbar">
+        <label class="select">
+          <span class="visually-hidden">Load an example</span>
+          <select id="examples"></select>
+        </label>
+        <button id="theme" class="button" type="button" aria-pressed="false">Dark diagram</button>
+        <button id="download" class="button" type="button" disabled>Download SVG</button>
+        <button id="share" class="button button-primary" type="button">Share</button>
+        <a class="button button-quiet" href="https://github.com/Archimaid/archimaid/blob/main/docs/reference.md"
+          >Syntax reference</a
+        >
+      </div>
+    </header>
+
+    <div class="view-tabs" role="tablist" aria-label="View">
+      <button id="tab-code" type="button" role="tab" aria-selected="true" aria-controls="code-pane">Code</button>
+      <button id="tab-diagram" type="button" role="tab" aria-selected="false" aria-controls="diagram-pane">
+        Diagram
+      </button>
+    </div>
+
+    <main id="workspace" class="workspace" data-view="code">
+      <section id="code-pane" class="pane code-pane" aria-label="Source">
+        <div id="editor" class="editor"></div>
+        <div id="problems" class="problems" aria-live="polite"></div>
+      </section>
+      <section id="diagram-pane" class="pane diagram-pane" aria-label="Diagram">
+        <div id="preview" class="preview"></div>
+        <p id="preview-state" class="preview-state" aria-live="polite">Loading the renderer…</p>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
