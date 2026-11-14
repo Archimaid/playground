@@ -268,6 +268,106 @@ body {
   font-weight: 600;
 }
 
+.icon-small {
+  width: 13px;
+  height: 13px;
+}
+
+.github-icon {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+  color: var(--ink);
+}
+
+.github-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.github-icon:hover {
+  background: var(--control-sunken);
+}
+
+.download {
+  position: relative;
+}
+
+.download .button[aria-expanded='true'] {
+  border-color: var(--ink);
+  background: var(--control-sunken);
+}
+
+.download-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  background: var(--white);
+  box-shadow: 0 12px 32px rgba(23, 23, 28, 0.16);
+}
+
+.download-menu fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.download-menu legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--ink-muted);
+  font: 600 12px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.download-menu label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.download-menu input {
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.download-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.download-actions .button {
+  justify-content: center;
+  height: 40px;
+}
+
+.download-hint {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .count-badge {
   display: inline-block;
   min-width: 20px;
@@ -617,16 +717,45 @@ body {
     padding: 8px 12px 8px 16px;
   }
 
-  .brand-name,
   .topbar-links {
     display: none;
   }
 
+  .github-icon {
+    display: inline-flex;
+  }
+
+  /* Stacked so both words fit beside the controls: the logo spans the name and the lighter subtitle. */
+  .brand {
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 10px;
+    row-gap: 0;
+    align-content: center;
+  }
+
+  .brand svg {
+    grid-row: span 2;
+  }
+
+  .brand svg {
+    align-self: center;
+  }
+
+  .brand-name {
+    align-self: end;
+    font-size: 16px;
+    line-height: 1;
+  }
+
   .brand-suffix {
+    align-self: start;
     padding-left: 0;
     border-left: 0;
-    color: var(--ink);
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: 0;
   }
 
   .topbar .button,
@@ -675,7 +804,7 @@ body {
     padding: 0 9px;
   }
 
-  #download {
+  .download {
     margin-left: auto;
   }
 

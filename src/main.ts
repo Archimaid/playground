@@ -6,6 +6,7 @@ import './styles.css';
 import { validateArchiMate, type ArchiMateDiagnostic, type ArchiMateModel } from 'archimaid/language';
 import { createSourceEditor } from './editor.ts';
 import { examples, starterExample } from './examples.ts';
+import { downloadBlob, prepareSvg, renderPng, type ExportBackground } from './export.ts';
 import { convertNotation, detectNotation, type Notation } from './notation.ts';
 import { renderDiagram, type DiagramTheme } from './render.ts';
 import { decodeShareHash, encodeShareHash } from './share.ts';
@@ -16,6 +17,7 @@ import { applyZoom, clampZoom, displayedScale, maxZoom, minZoom, stepZoom, type 
 const sourceKey = 'archimaid.playground.source';
 const themeKey = 'archimaid.playground.theme';
 const notationKey = 'archimaid.playground.notation';
+const exportBackgroundKey = 'archimaid.playground.export-background';
 const renderDelayMs = 250;
 
 function byId<T extends HTMLElement>(id: string, type: new () => T): T {
@@ -49,6 +51,10 @@ const ui = {
   themeLight: byId('theme-light', HTMLButtonElement),
   themeDark: byId('theme-dark', HTMLButtonElement),
   download: byId('download', HTMLButtonElement),
+  downloadControl: byId('download-control', HTMLDivElement),
+  downloadMenu: byId('download-menu', HTMLDivElement),
+  downloadSvg: byId('download-svg', HTMLButtonElement),
+  downloadPng: byId('download-png', HTMLButtonElement),
   share: byId('share', HTMLButtonElement),
   tabCode: byId('tab-code', HTMLButtonElement),
   tabCodeBadge: byId('tab-code-badge', HTMLSpanElement),
@@ -351,16 +357,56 @@ ui.notationShorthand.addEventListener('click', () => selectNotation('shorthand')
 ui.themeLight.addEventListener('click', () => selectTheme('light'));
 ui.themeDark.addEventListener('click', () => selectTheme('dark'));
 
-ui.download.addEventListener('click', () => {
+const backgroundInputs = Array.from(
+  ui.downloadMenu.querySelectorAll<HTMLInputElement>('input[name="download-background"]'),
+);
+const storedBackground = readStored(exportBackgroundKey);
+for (const input of backgroundInputs) {
+  if (storedBackground === 'transparent' || storedBackground === 'diagram')
+    input.checked = input.value === storedBackground;
+  input.addEventListener('change', () => writeStored(exportBackgroundKey, input.value));
+}
+
+function exportBackground(): ExportBackground {
+  return backgroundInputs.find((input) => input.checked)?.value === 'transparent' ? 'transparent' : 'diagram';
+}
+
+function setDownloadMenu(open: boolean): void {
+  ui.downloadMenu.hidden = !open;
+  ui.download.setAttribute('aria-expanded', String(open));
+  if (open) backgroundInputs.find((input) => input.checked)?.focus();
+}
+
+async function exportDiagram(format: 'svg' | 'png'): Promise<void> {
   if (!rendered) return;
+  const background = exportBackground();
   const { model, svg } = rendered;
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${slug(model.title ?? model.accTitle ?? '')}.svg`;
-  link.click();
-  // Revoking in the same task can cancel the download in some browsers.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  const name = `${slug(model.title ?? model.accTitle ?? '')}${background === 'transparent' ? '-transparent' : ''}`;
+  setDownloadMenu(false);
+  ui.download.focus();
+  try {
+    const exported = prepareSvg(svg, background);
+    if (format === 'svg') downloadBlob(new Blob([exported.source], { type: 'image/svg+xml' }), `${name}.svg`);
+    else downloadBlob(await renderPng(exported), `${name}.png`);
+  } catch (error) {
+    showToast(
+      `The ${format.toUpperCase()} could not be made: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+ui.download.addEventListener('click', () => setDownloadMenu(ui.download.getAttribute('aria-expanded') !== 'true'));
+ui.downloadSvg.addEventListener('click', () => void exportDiagram('svg'));
+ui.downloadPng.addEventListener('click', () => void exportDiagram('png'));
+document.addEventListener('pointerdown', (event) => {
+  if (!ui.downloadMenu.hidden && event.target instanceof Node && !ui.downloadControl.contains(event.target)) {
+    setDownloadMenu(false);
+  }
+});
+ui.downloadControl.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || ui.downloadMenu.hidden) return;
+  setDownloadMenu(false);
+  ui.download.focus();
 });
 
 ui.share.addEventListener('click', async () => {
@@ -377,14 +423,27 @@ ui.share.addEventListener('click', async () => {
 ui.tabCode.addEventListener('click', () => selectView('code'));
 ui.tabDiagram.addEventListener('click', () => selectView('diagram'));
 
+// Matches the phone breakpoint in styles.css, where only one of the two panes is shown.
+const singlePaneLayout = matchMedia('(max-width: 760px)');
+
+// Someone opening a share link came to see the diagram; on a phone that is the second tab.
+function showSharedDiagram(): void {
+  if (singlePaneLayout.matches) selectView('diagram');
+}
+
 // Pasting another share link into the address bar of an open playground only changes the hash.
 window.addEventListener('hashchange', async () => {
   const next = await decodeShareHash(location.hash);
-  if (next.kind === 'source') editor.replaceSource(next.source);
-  else if (next.kind === 'invalid') showToast('This share link is damaged, so the diagram was not changed.');
+  if (next.kind === 'source') {
+    editor.replaceSource(next.source);
+    showSharedDiagram();
+  } else if (next.kind === 'invalid') {
+    showToast('This share link is damaged, so the diagram was not changed.');
+  }
 });
 
 setUpSplit(ui.workspace, ui.divider);
 applyTheme();
 updateZoomControls();
 update(editor.source(), 0);
+if (shared.kind === 'source') showSharedDiagram();

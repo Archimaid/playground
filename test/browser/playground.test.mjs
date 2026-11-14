@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { after, before, test } from 'node:test';
 import { chromium } from 'playwright';
 import { preview } from 'vite';
@@ -142,4 +143,91 @@ test('the notation switch rewrites the source and applies to examples loaded lat
   assert.match(await page.locator('.cm-content').innerText(), /clerk @==> fulfil/u);
   assert.deepEqual(pageErrors, []);
   await close();
+});
+
+async function download(page, format, background) {
+  await page.click('#download');
+  await page.check(`input[name="download-background"][value="${background}"]`);
+  const [file] = await Promise.all([page.waitForEvent('download'), page.click(`#download-${format}`)]);
+  return { name: file.suggestedFilename(), bytes: await readFile(await file.path()) };
+}
+
+// Decodes the PNG in the page and reports its size and the alpha of the top-left pixel.
+function inspectPng(page, bytes) {
+  return page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const canvas = Object.assign(document.createElement('canvas'), { width: image.width, height: image.height });
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    return { width: image.width, height: image.height, cornerAlpha: context.getImageData(0, 0, 1, 1).data[3] };
+  }, bytes.toString('base64'));
+}
+
+test('downloads SVG and PNG with the diagram background or a transparent one', async () => {
+  const { page, pageErrors, close } = await openPlayground();
+  await renderedElements(page).first().waitFor();
+  const viewBox = await page
+    .locator('#preview svg')
+    .evaluate((svg) => [svg.viewBox.baseVal.width, svg.viewBox.baseVal.height]);
+
+  const opaqueSvg = await download(page, 'svg', 'diagram');
+  assert.equal(opaqueSvg.name, 'my-first-diagram.svg');
+  const transparentSvg = await download(page, 'svg', 'transparent');
+  assert.equal(transparentSvg.name, 'my-first-diagram-transparent.svg');
+  const sizes = await page.evaluate(
+    ([opaque, transparent]) =>
+      [opaque, transparent].map((source) => {
+        const svg = new DOMParser().parseFromString(source, 'image/svg+xml').documentElement;
+        const canvasRects = Array.from(svg.children).filter(
+          (child) =>
+            child.localName === 'rect' &&
+            child.getAttribute('width') === svg.getAttribute('width') &&
+            child.getAttribute('height') === svg.getAttribute('height'),
+        ).length;
+        return { width: svg.getAttribute('width'), height: svg.getAttribute('height'), canvasRects };
+      }),
+    [opaqueSvg.bytes.toString('utf8'), transparentSvg.bytes.toString('utf8')],
+  );
+  assert.deepEqual(sizes, [
+    { width: String(viewBox[0]), height: String(viewBox[1]), canvasRects: 1 },
+    { width: String(viewBox[0]), height: String(viewBox[1]), canvasRects: 0 },
+  ]);
+
+  const opaquePng = await download(page, 'png', 'diagram');
+  assert.equal(opaquePng.name, 'my-first-diagram.png');
+  const opaque = await inspectPng(page, opaquePng.bytes);
+  assert.deepEqual([opaque.width, opaque.height], [Math.round(viewBox[0] * 2), Math.round(viewBox[1] * 2)]);
+  assert.equal(opaque.cornerAlpha, 255);
+  const transparent = await inspectPng(page, (await download(page, 'png', 'transparent')).bytes);
+  assert.equal(transparent.cornerAlpha, 0);
+
+  assert.equal(await page.locator('#download-menu').isHidden(), true);
+  assert.deepEqual(pageErrors, []);
+  await close();
+});
+
+test('a share link opens on the Diagram tab on a phone, and on both panes on a desktop', async () => {
+  const sharer = await openPlayground();
+  await renderedElements(sharer.page).first().waitFor();
+  await sharer.page.click('#share');
+  await sharer.page.locator('#toast', { hasText: 'Link copied' }).waitFor();
+  const link = await sharer.page.evaluate(() => navigator.clipboard.readText());
+  await sharer.close();
+
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const phone = await context.newPage();
+  await phone.goto(link);
+  await phone.locator('#preview svg [data-archimate-element]').first().waitFor();
+  assert.equal(await phone.locator('#tab-diagram').getAttribute('aria-selected'), 'true');
+  assert.equal(await phone.locator('#code-pane').isHidden(), true);
+  await phone.goto(baseUrl);
+  assert.equal(await phone.locator('#tab-code').getAttribute('aria-selected'), 'true');
+  await context.close();
+
+  const desktop = await openPlayground(link);
+  await renderedElements(desktop.page).first().waitFor();
+  assert.equal(await desktop.page.locator('#code-pane').isVisible(), true);
+  await desktop.close();
 });
