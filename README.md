@@ -21,11 +21,12 @@ npm run dev
 | ---------------------- | ---------------------------------------------------------------------------------------------- |
 | `npm run dev`          | Start the Vite dev server                                                                      |
 | `npm run build`        | Type-check and build into `dist`                                                               |
-| `npm test`             | Unit tests for the share-link codec                                                            |
+| `npm test`             | Unit tests for share links, the notation switch and the SEO files                              |
 | `npm run test:browser` | Build, then smoke-test the built page in Chromium (run `npx playwright install chromium` once) |
 | `npm run lint`         | Check formatting with Prettier                                                                 |
+| `npm run og`           | Build, then render `public/og.png`, the social preview, from the playground's starter diagram  |
 
-To pick up a new `archimaid` release, update the dependency and run `npm run test:browser`; it renders every packaged example.
+To pick up a new `archimaid` release, update the dependency and run `npm run test:browser`; it renders every packaged example. Run `npm run og` as well when the release changes how diagrams look, and commit the new image.
 
 ## Deploy to Cloudflare
 

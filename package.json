@@ -13,7 +13,8 @@
     "lint": "prettier --check .",
     "format": "prettier --write .",
     "test": "node --test test/*.test.ts",
-    "test:browser": "npm run build && node --test test/browser/*.test.mjs"
+    "test:browser": "npm run build && node --test test/browser/*.test.mjs",
+    "og": "npm run build && node scripts/render-og.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "6.11.1",

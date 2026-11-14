@@ -84,6 +84,15 @@ body {
   white-space: nowrap;
 }
 
+.noscript {
+  margin: 16px 28px 0;
+  padding: 14px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: var(--business);
+  font-size: 15px;
+}
+
 :focus-visible {
   outline: 3px solid var(--application-stroke);
   outline-offset: 3px;
