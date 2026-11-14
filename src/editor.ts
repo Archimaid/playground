@@ -13,6 +13,48 @@ export interface SourceEditor {
   readonly revealDiagnostic: (diagnostic: ArchiMateDiagnostic) => void;
 }
 
+// The source panel is dark like the code views on archimaid.org; colours come from the --code-* tokens.
+const darkPanelTheme = EditorView.theme(
+  {
+    '&': { height: '100%', backgroundColor: 'var(--code-bg)', color: 'var(--code-ink)' },
+    '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65' },
+    '.cm-content': { caretColor: 'var(--code-ink)', padding: '14px 0' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--code-ink)' },
+    '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
+      { backgroundColor: 'var(--code-selection)' },
+    '.cm-gutters': { backgroundColor: 'var(--code-bg)', color: 'var(--code-gutter)', border: 'none' },
+    '.cm-lineNumbers .cm-gutterElement': { paddingLeft: '14px' },
+    '.cm-activeLine': { backgroundColor: 'var(--code-active-line)' },
+    '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--code-muted)' },
+    '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
+      backgroundColor: 'var(--code-selection)',
+      outline: 'none',
+    },
+    '.cm-tooltip': {
+      backgroundColor: 'var(--code-raised)',
+      color: 'var(--code-ink)',
+      border: '1px solid var(--code-line)',
+    },
+    '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+      backgroundColor: 'var(--code-selection)',
+      color: 'var(--code-ink)',
+    },
+    '.cm-diagnostic': { borderLeftColor: 'var(--code-error)' },
+    '.cm-diagnostic-warning': { borderLeftColor: 'var(--code-warning)' },
+    '.cm-panels': { backgroundColor: 'var(--code-raised)', color: 'var(--code-ink)' },
+    '.cm-panels.cm-panels-bottom': { borderTop: '1px solid var(--code-line)' },
+    '.cm-textfield': {
+      backgroundColor: 'var(--code-bg)',
+      color: 'var(--code-ink)',
+      border: '1px solid var(--code-line)',
+    },
+    '.cm-button': { backgroundImage: 'none', backgroundColor: 'var(--code-raised)', color: 'var(--code-ink)' },
+    '.cm-searchMatch': { backgroundColor: 'rgba(255, 194, 168, 0.25)' },
+    '.cm-foldPlaceholder': { backgroundColor: 'var(--code-raised)', color: 'var(--code-muted)', border: 'none' },
+  },
+  { dark: true },
+);
+
 export interface CursorPosition {
   readonly line: number;
   readonly column: number;
@@ -34,6 +76,7 @@ export function createSourceEditor(
       doc: initialSource,
       extensions: [
         basicSetup,
+        darkPanelTheme,
         lintGutter(),
         archimateSyntax,
         EditorState.tabSize.of(2),

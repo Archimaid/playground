@@ -30,6 +30,11 @@ export function prepareSvg(previewSvg: string, background: ExportBackground): Ex
   return { source: new XMLSerializer().serializeToString(svg), width, height };
 }
 
+export function diagramBackground(svg: SVGSVGElement): string | undefined {
+  const { width, height } = svg.viewBox.baseVal;
+  return canvasRect(svg, width, height)?.getAttribute('fill') ?? undefined;
+}
+
 // The renderer paints the canvas as the first full-size rect directly under the root, before any group.
 function canvasRect(svg: SVGSVGElement, width: number, height: number): Element | undefined {
   return Array.from(svg.children).find(

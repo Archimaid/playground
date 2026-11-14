@@ -25,19 +25,22 @@ function naturalSize(svg: SVGSVGElement): NaturalSize | undefined {
   return width > 0 && height > 0 ? { width, height } : undefined;
 }
 
-export function applyZoom(svg: SVGSVGElement, zoom: Zoom): void {
+export interface AvailableSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+// Fit shrinks a large diagram until it fits both ways but never enlarges a small one past its natural size.
+export function applyZoom(svg: SVGSVGElement, zoom: Zoom, available: AvailableSize): void {
   const size = naturalSize(svg);
   if (!size) return;
-  if (zoom === 'fit') {
-    // Fit shrinks a wide diagram to the pane but never enlarges a small one past its natural size.
-    svg.style.width = '100%';
-    svg.style.maxWidth = `${size.width}px`;
-    svg.style.height = 'auto';
-    return;
-  }
-  svg.style.width = `${size.width * zoom}px`;
+  const scale =
+    zoom === 'fit'
+      ? Math.max(minZoom / 4, Math.min(1, available.width / size.width, available.height / size.height))
+      : zoom;
+  svg.style.width = `${size.width * scale}px`;
   svg.style.maxWidth = 'none';
-  svg.style.height = `${size.height * zoom}px`;
+  svg.style.height = `${size.height * scale}px`;
 }
 
 export function displayedScale(svg: SVGSVGElement): number | undefined {

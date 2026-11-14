@@ -1,5 +1,5 @@
 import { HighlightStyle, StreamLanguage, syntaxHighlighting, type StringStream } from '@codemirror/language';
-import { tags } from '@lezer/highlight';
+import { Tag, tags } from '@lezer/highlight';
 import { elementTypes, relationshipConnectors, relationshipTypes } from 'archimaid/language';
 
 const keywords = new Set([
@@ -19,7 +19,14 @@ const keywords = new Set([
   'click',
   'href',
 ]);
-const typeNames = new Set<string>([...Object.keys(elementTypes), ...relationshipTypes]);
+type Layer = (typeof elementTypes)[keyof typeof elementTypes]['category'];
+
+// Element types are tinted by their layer, as on archimaid.org, so the source previews the diagram's colours.
+const elementLayers = new Map<string, Layer>(Object.entries(elementTypes).map(([key, type]) => [key, type.category]));
+const layers = new Set(elementLayers.values());
+const relationshipTypeNames = new Set<string>(relationshipTypes);
+const layerTags = new Map(Array.from(layers, (layer) => [layer, Tag.define(tags.typeName)]));
+const layerToken = (layer: Layer): string => `layer-${layer}`;
 const metadataKeys = /^(?:title|accTitle|accDescr)\s*:/u;
 // Longest first, so `<..>` wins over `<..` and `..`.
 const connectors = [...Object.keys(relationshipConnectors), '->'].sort((left, right) => right.length - left.length);
@@ -60,7 +67,9 @@ function token(stream: StringStream, state: State): string | null {
   if (Array.isArray(word)) {
     const text = word[0];
     if (keywords.has(text)) return 'keyword';
-    if (typeNames.has(text)) return 'typeName';
+    const layer = elementLayers.get(text);
+    if (layer) return layerToken(layer);
+    if (relationshipTypeNames.has(text)) return 'operator';
     if (/^(?:TB|BT|LR|RL|architecture|framework|graph|read|write|readWrite|unspecified)$/u.test(text)) return 'atom';
     return 'variableName';
   }
@@ -73,18 +82,19 @@ const archimateLanguage = StreamLanguage.define<State>({
   startState: () => ({ inMetadataValue: false }),
   copyState: (state) => ({ ...state }),
   token,
+  tokenTable: Object.fromEntries(Array.from(layerTags, ([layer, tag]) => [layerToken(layer), tag])),
   languageData: { commentTokens: { line: '%%' } },
 });
 
 const highlightStyle = HighlightStyle.define([
-  { tag: tags.heading, color: 'var(--syntax-heading)', fontWeight: '600' },
-  { tag: tags.keyword, color: 'var(--syntax-keyword)', fontWeight: '600' },
-  { tag: tags.typeName, color: 'var(--syntax-type)' },
+  { tag: tags.heading, color: 'var(--syntax-keyword)', fontWeight: '600' },
+  { tag: tags.keyword, color: 'var(--syntax-keyword)' },
   { tag: tags.string, color: 'var(--syntax-string)' },
   { tag: tags.operator, color: 'var(--syntax-operator)', fontWeight: '600' },
-  { tag: tags.atom, color: 'var(--syntax-atom)' },
-  { tag: tags.meta, color: 'var(--syntax-keyword)', fontWeight: '600' },
+  { tag: tags.atom, color: 'var(--syntax-string)' },
+  { tag: tags.meta, color: 'var(--syntax-keyword)' },
   { tag: tags.comment, color: 'var(--syntax-comment)', fontStyle: 'italic' },
+  ...Array.from(layerTags, ([layer, tag]) => ({ tag, color: `var(--syntax-layer-${layer})`, fontWeight: '600' })),
 ]);
 
 export const archimateSyntax = [archimateLanguage, syntaxHighlighting(highlightStyle)];

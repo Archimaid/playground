@@ -6,13 +6,22 @@ import './styles.css';
 import { validateArchiMate, type ArchiMateDiagnostic, type ArchiMateModel } from 'archimaid/language';
 import { createSourceEditor } from './editor.ts';
 import { examples, starterExample } from './examples.ts';
-import { downloadBlob, prepareSvg, renderPng, type ExportBackground } from './export.ts';
+import { diagramBackground, downloadBlob, prepareSvg, renderPng, type ExportBackground } from './export.ts';
 import { convertNotation, detectNotation, type Notation } from './notation.ts';
 import { renderDiagram, type DiagramTheme } from './render.ts';
 import { decodeShareHash, encodeShareHash } from './share.ts';
 import { setUpSplit } from './split.ts';
 import { readStored, writeStored } from './storage.ts';
-import { applyZoom, clampZoom, displayedScale, maxZoom, minZoom, stepZoom, type Zoom } from './zoom.ts';
+import {
+  applyZoom,
+  clampZoom,
+  displayedScale,
+  maxZoom,
+  minZoom,
+  stepZoom,
+  type AvailableSize,
+  type Zoom,
+} from './zoom.ts';
 
 const sourceKey = 'archimaid.playground.source';
 const themeKey = 'archimaid.playground.theme';
@@ -40,6 +49,8 @@ const ui = {
   modelSummary: byId('model-summary', HTMLSpanElement),
   storageState: byId('storage-state', HTMLSpanElement),
   canvas: byId('diagram-pane', HTMLElement),
+  diagramTitle: byId('diagram-title', HTMLSpanElement),
+  themeToggle: byId('theme-toggle', HTMLButtonElement),
   preview: byId('preview', HTMLDivElement),
   previewState: byId('preview-state', HTMLParagraphElement),
   previewStateText: byId('preview-state-text', HTMLSpanElement),
@@ -119,9 +130,12 @@ async function draw(source: string, model: ArchiMateModel): Promise<void> {
   }
   rendered = { svg: outcome.svg, model };
   ui.preview.innerHTML = outcome.svg;
+  ui.diagramTitle.textContent = model.title ?? model.accTitle ?? 'Diagram';
   const svg = currentSvg();
-  if (svg) applyZoom(svg, zoom);
-  updateZoomControls();
+  // The card around the diagram takes the diagram's own canvas colour, so a light or dark diagram fills it edge to edge.
+  ui.preview.style.backgroundColor = (svg && diagramBackground(svg)) ?? '';
+  if (svg && zoom !== 'fit') applyZoom(svg, zoom, availableSize());
+  refit();
   ui.download.disabled = false;
   // A render that started before the latest edit may finish after it; keep the hint if the source broke since.
   if (latest.source === source || latest.model) showPreviewState('', 'ready');
@@ -255,7 +269,7 @@ function selectView(view: 'code' | 'diagram'): void {
   ui.tabCode.setAttribute('aria-selected', String(view === 'code'));
   ui.tabDiagram.setAttribute('aria-selected', String(view === 'diagram'));
   // The pane was display: none, so its fitted scale is only known once it is visible again.
-  if (view === 'diagram') updateZoomControls();
+  if (view === 'diagram') refit();
 }
 
 function slug(text: string): string {
@@ -283,9 +297,26 @@ function setZoom(next: Zoom): void {
   const { preview } = ui;
   const centreX = (preview.scrollLeft + preview.clientWidth / 2) / preview.scrollWidth;
   const centreY = (preview.scrollTop + preview.clientHeight / 2) / preview.scrollHeight;
-  applyZoom(svg, zoom);
+  applyZoom(svg, zoom, availableSize());
   preview.scrollLeft = centreX * preview.scrollWidth - preview.clientWidth / 2;
   preview.scrollTop = centreY * preview.scrollHeight - preview.clientHeight / 2;
+  updateZoomControls();
+}
+
+// The room inside the card for the diagram itself. A hidden panel (the other tab on a phone) has none,
+// and is fitted again by the resize observer once it shows.
+function availableSize(): AvailableSize {
+  const style = getComputedStyle(ui.preview);
+  return {
+    width: ui.preview.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+    height: ui.preview.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+  };
+}
+
+function refit(): void {
+  const svg = currentSvg();
+  const available = availableSize();
+  if (svg && zoom === 'fit' && available.width > 0 && available.height > 0) applyZoom(svg, zoom, available);
   updateZoomControls();
 }
 
@@ -309,6 +340,7 @@ function stepFromScreen(direction: 'in' | 'out'): void {
 function applyTheme(): void {
   ui.themeLight.setAttribute('aria-pressed', String(theme === 'light'));
   ui.themeDark.setAttribute('aria-pressed', String(theme === 'dark'));
+  ui.themeToggle.setAttribute('aria-pressed', String(theme === 'dark'));
 }
 
 function selectTheme(next: DiagramTheme): void {
@@ -348,14 +380,13 @@ ui.preview.addEventListener(
   },
   { passive: false },
 );
-new ResizeObserver(() => {
-  if (zoom === 'fit') updateZoomControls();
-}).observe(ui.preview);
+new ResizeObserver(refit).observe(ui.preview);
 
 ui.notationLong.addEventListener('click', () => selectNotation('long'));
 ui.notationShorthand.addEventListener('click', () => selectNotation('shorthand'));
 ui.themeLight.addEventListener('click', () => selectTheme('light'));
 ui.themeDark.addEventListener('click', () => selectTheme('dark'));
+ui.themeToggle.addEventListener('click', () => selectTheme(theme === 'dark' ? 'light' : 'dark'));
 
 const backgroundInputs = Array.from(
   ui.downloadMenu.querySelectorAll<HTMLInputElement>('input[name="download-background"]'),

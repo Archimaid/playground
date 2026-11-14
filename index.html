@@ -16,41 +16,20 @@
   <body>
     <header class="topbar">
       <a class="brand" href="https://archimaid.org">
-        <svg width="26" height="26" viewBox="0 0 120 120" aria-hidden="true">
-          <rect
-            x="34"
-            y="14"
-            width="74"
-            height="26"
-            rx="9"
-            stroke-width="8"
-            fill="var(--business)"
-            stroke="var(--ink)"
-          />
-          <rect
-            x="23"
-            y="47"
-            width="74"
-            height="26"
-            rx="9"
-            stroke-width="8"
-            fill="var(--application)"
-            stroke="var(--ink)"
-          />
-          <rect
-            x="12"
-            y="80"
-            width="74"
-            height="26"
-            rx="9"
-            stroke-width="8"
-            fill="var(--technology)"
-            stroke="var(--ink)"
-          />
+        <svg class="logo" viewBox="0 0 120 120" aria-hidden="true">
+          <rect x="34" y="14" width="74" height="26" rx="9" fill="var(--business)" />
+          <rect x="23" y="47" width="74" height="26" rx="9" fill="var(--application)" />
+          <rect x="12" y="80" width="74" height="26" rx="9" fill="var(--technology)" />
         </svg>
-        <span class="brand-name">Archimaid</span>
-        <span class="brand-suffix">Playground</span>
+        <span class="brand-text">
+          <span class="brand-name">Archimaid</span>
+          <span class="brand-chip">Playground</span>
+        </span>
       </a>
+      <nav class="topbar-links" aria-label="Documentation">
+        <a href="https://github.com/Archimaid/archimaid/blob/main/docs/reference.md">Reference</a>
+        <a href="https://archimaid.org">archimaid.org</a>
+      </nav>
       <label class="examples">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -61,17 +40,13 @@
         <span class="visually-hidden">Load an example</span>
         <select id="examples"></select>
       </label>
-      <div class="topbar-spacer"></div>
-      <nav class="topbar-links" aria-label="Documentation">
-        <a href="https://github.com/Archimaid/archimaid/blob/main/docs/reference.md">Syntax reference</a>
-        <a href="https://github.com/Archimaid/archimaid">GitHub</a>
-      </nav>
-      <a class="github-icon" href="https://github.com/Archimaid/archimaid" aria-label="Archimaid on GitHub">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+      <a class="button github" href="https://github.com/Archimaid/archimaid" aria-label="Archimaid on GitHub">
+        <svg class="icon icon-filled" viewBox="0 0 24 24" aria-hidden="true">
           <path
             d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
           />
         </svg>
+        <span class="button-label">GitHub</span>
       </a>
       <button id="share" class="button button-primary" type="button">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -92,10 +67,10 @@
     </div>
 
     <main id="workspace" class="workspace" data-view="code">
-      <section id="code-pane" class="pane code-pane" aria-label="Source">
-        <div class="pane-header">
-          <h2 class="pane-title">Source</h2>
-          <div class="segmented notation" role="group" aria-label="Relationship notation">
+      <section id="code-pane" class="panel code-panel" aria-label="Source">
+        <div class="panel-bar">
+          <h2 class="file-tab"><span class="file-dot" aria-hidden="true"></span>diagram.mmd</h2>
+          <div class="segmented segmented-dark notation" role="group" aria-label="Relationship notation">
             <button id="notation-long" type="button" aria-pressed="false">Long form</button>
             <button id="notation-shorthand" type="button" aria-pressed="false">Shorthand</button>
           </div>
@@ -119,30 +94,37 @@
         role="separator"
         tabindex="0"
         aria-orientation="vertical"
-        aria-label="Resize the source and diagram panes"
+        aria-label="Resize the source and diagram panels"
         aria-controls="code-pane"
         aria-valuemin="20"
         aria-valuemax="80"
       ></div>
 
-      <section id="diagram-pane" class="pane diagram-pane" aria-label="Diagram">
-        <div class="pane-header diagram-toolbar">
-          <h2 class="pane-title">Diagram</h2>
-          <div class="toolbar-spacer"></div>
+      <section id="diagram-pane" class="panel diagram-panel" aria-label="Diagram">
+        <div class="panel-bar diagram-toolbar">
+          <h2 class="file-tab">
+            <span class="file-dot file-dot-diagram" aria-hidden="true"></span><span id="diagram-title">Diagram</span>
+          </h2>
           <div class="button-group" role="group" aria-label="Zoom">
             <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
             <button id="zoom-reset" class="zoom-level" type="button" aria-label="Zoom to 100%">100%</button>
             <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
           </div>
-          <button id="zoom-fit" class="button" type="button" aria-pressed="true">Fit</button>
-          <div class="segmented" role="group" aria-label="Diagram theme">
+          <button id="zoom-fit" class="chip-button fit" type="button" aria-pressed="true">Fit</button>
+          <div class="segmented theme-switch" role="group" aria-label="Diagram theme">
             <button id="theme-light" type="button" aria-pressed="true">Light</button>
             <button id="theme-dark" type="button" aria-pressed="false">Dark</button>
           </div>
+          <button id="theme-toggle" class="chip-button icon-button theme-toggle" type="button" aria-pressed="false">
+            <span class="visually-hidden">Dark diagram</span>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+            </svg>
+          </button>
           <div id="download-control" class="download">
             <button
               id="download"
-              class="button"
+              class="chip-button download-button"
               type="button"
               aria-haspopup="dialog"
               aria-expanded="false"
@@ -155,7 +137,9 @@
                 <path d="M5 21h14" />
               </svg>
               <span class="download-label">Download</span>
-              <svg class="icon icon-small" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              <svg class="icon icon-small download-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </button>
             <div id="download-menu" class="download-menu" role="dialog" aria-label="Download diagram" hidden>
               <fieldset>
@@ -173,13 +157,11 @@
             </div>
           </div>
         </div>
-        <div class="canvas">
-          <div id="preview" class="preview"></div>
-          <p id="preview-state" class="preview-state" aria-live="polite">
-            <span class="preview-state-dot" aria-hidden="true"></span
-            ><span id="preview-state-text">Loading the renderer…</span>
-          </p>
-        </div>
+        <p id="preview-state" class="preview-state" aria-live="polite">
+          <span class="preview-state-dot" aria-hidden="true"></span
+          ><span id="preview-state-text">Loading the renderer…</span>
+        </p>
+        <div id="preview" class="preview"></div>
       </section>
     </main>
 
